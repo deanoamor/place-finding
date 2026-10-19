@@ -1,0 +1,45 @@
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; font: 14px/1.4 system-ui, sans-serif; color: #1f2937; }
+body { display: flex; }
+
+#panel {
+  width: 340px; flex: none; padding: 16px; overflow-y: auto;
+  border-right: 1px solid #e5e7eb; background: #fff; z-index: 1;
+}
+#map { flex: 1; }
+
+h1 { margin: 0 0 4px; font-size: 20px; }
+.hint { margin: 0 0 12px; color: #6b7280; }
+label { display: block; margin: 12px 0 4px; font-weight: 600; }
+
+input, select, button {
+  font: inherit; padding: 8px 10px; border-radius: 6px; border: 1px solid #d1d5db;
+}
+select, #geocode input, #custom-tag input { width: 100%; }
+#custom-tag { display: flex; gap: 6px; margin-top: 6px; }
+
+button { cursor: pointer; background: #2563eb; color: #fff; border-color: #2563eb; }
+button:disabled { opacity: .5; cursor: not-allowed; }
+button.secondary { background: #fff; color: #1f2937; border-color: #d1d5db; }
+button.small { padding: 4px 8px; }
+#search, #clear { width: 100%; margin-top: 10px; }
+
+#geocode { display: flex; gap: 6px; margin-bottom: 4px; }
+#geocode button { flex: none; }
+
+#status { min-height: 20px; margin: 10px 0; color: #374151; }
+#status.error { color: #b91c1c; }
+
+#results-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+#results { list-style: none; margin: 0; padding: 0; }
+#results li { padding: 8px 4px; border-bottom: 1px solid #f3f4f6; cursor: pointer; }
+#results li:hover { background: #f9fafb; }
+#results .name { font-weight: 600; }
+#results .meta { color: #6b7280; font-size: 12px; }
+
+.attr { margin-top: 16px; font-size: 12px; color: #6b7280; }
+
+@media (max-width: 700px) {
+  body { flex-direction: column-reverse; }
+  #panel { width: 100%; height: 45%; border-right: 0; border-top: 1px solid #e5e7eb; }
+}
