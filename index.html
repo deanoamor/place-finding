@@ -6,7 +6,7 @@
   <title>Place Finder</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css">
-  <link rel="stylesheet" href="style.css?v=3">
+  <link rel="stylesheet" href="style.css?v=4">
 </head>
 <body>
   <aside id="panel">
@@ -40,6 +40,18 @@
 
     <div id="status" role="status"></div>
 
+    <section id="detail" hidden>
+      <button id="back" type="button" class="secondary small">← Daftar hasil</button>
+      <h2 id="d-name"></h2>
+      <div id="d-sub" class="meta"></div>
+      <div id="d-actions"></div>
+      <div id="d-body"></div>
+      <details id="d-raw">
+        <summary>Data mentah OSM (<span id="d-count"></span> tag)</summary>
+        <table id="d-table"></table>
+      </details>
+    </section>
+
     <div id="results-head" hidden>
       <strong id="count"></strong>
       <span>
@@ -55,7 +67,7 @@
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
-  <script src="lib.js?v=3"></script>
-  <script src="app.js?v=3"></script>
+  <script src="lib.js?v=4"></script>
+  <script src="app.js?v=4"></script>
 </body>
 </html>

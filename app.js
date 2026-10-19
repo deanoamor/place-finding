@@ -1,4 +1,4 @@
-const { CATEGORIES, polygonAreaKm2, circleAreaKm2, buildQuery, elementToPlace, toCsv, toGeoJson } = PlaceLib;
+const { CATEGORIES, polygonAreaKm2, circleAreaKm2, buildQuery, elementToPlace, toCsv, toGeoJson, groupTags, safeHref, primaryType } = PlaceLib;
 
 const OVERPASS_URLS = [
   'https://overpass-api.de/api/interpreter',
@@ -146,6 +146,8 @@ els.clear.addEventListener('click', () => {
   drawn.clearLayers();
   markers.clearLayers();
   els.results.replaceChildren();
+  places = [];
+  closeDetail();
   els.resultsHead.hidden = true;
   setStatus('');
   syncButtons();
@@ -228,15 +230,19 @@ els.search.addEventListener('click', async () => {
 });
 
 // ---- render hasil (textContent saja: data OSM tidak dipercaya) ----
+const detailEl = $('detail');
+let openPlaceId = null;
+
 function render(list) {
+  closeDetail();
   markers.clearLayers();
   els.results.replaceChildren();
   els.resultsHead.hidden = list.length === 0;
   els.count.textContent = `${list.length} tempat`;
 
   for (const p of list) {
-    const marker = L.marker([p.lat, p.lon]).addTo(markers);
-    marker.bindPopup(() => popupNode(p));
+    const marker = L.marker([p.lat, p.lon], { title: p.name }).addTo(markers);
+    marker.on('click', () => showDetail(p));
 
     const li = document.createElement('li');
     const name = document.createElement('div');
@@ -244,34 +250,100 @@ function render(list) {
     name.textContent = p.name;
     const meta = document.createElement('div');
     meta.className = 'meta';
-    meta.textContent = p.address || 'Alamat tidak tersedia';
+    meta.textContent = [primaryType(p.tags), p.address].filter(Boolean).join(' · ') || 'Alamat tidak tersedia';
     li.append(name, meta);
-    li.addEventListener('click', () => {
-      map.setView([p.lat, p.lon], Math.max(map.getZoom(), 17));
-      marker.openPopup();
-    });
+    li.addEventListener('click', () => showDetail(p));
     els.results.appendChild(li);
   }
 }
 
-function popupNode(p) {
-  const box = document.createElement('div');
-  const title = document.createElement('strong');
-  title.textContent = p.name;
-  box.appendChild(title);
-  for (const [label, val] of [['Alamat', p.address], ['Telepon', p.phone], ['Jam buka', p.opening_hours]]) {
-    if (!val) continue;
-    box.appendChild(document.createElement('br'));
-    box.appendChild(document.createTextNode(`${label}: ${val}`));
-  }
-  if (/^https?:\/\//i.test(p.website)) {
-    box.appendChild(document.createElement('br'));
-    const a = document.createElement('a');
-    a.href = p.website; a.textContent = 'Website'; a.target = '_blank'; a.rel = 'noopener';
-    box.appendChild(a);
-  }
-  return box;
+function el(tag, props, ...kids) {
+  const n = document.createElement(tag);
+  if (props) Object.assign(n, props);
+  n.append(...kids.filter((k) => k != null));
+  return n;
 }
+
+function link(href, text) {
+  return el('a', { href, textContent: text, target: '_blank', rel: 'noopener noreferrer' });
+}
+
+// Satu nilai tag -> node; tautan hanya bila lolos validasi safeHref.
+function valueNode(row, v) {
+  const href = row.kind === 'text' ? null : safeHref(row.kind, row.key, v);
+  return href ? link(href, v) : document.createTextNode(v);
+}
+
+function fmtDate(ts) {
+  const d = new Date(ts);
+  return isNaN(d) ? ts : d.toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' });
+}
+
+function showDetail(p) {
+  openPlaceId = p.id;
+  map.setView([p.lat, p.lon], Math.max(map.getZoom(), 17));
+
+  $('d-name').textContent = p.name;
+  const sub = $('d-sub'); sub.replaceChildren();
+  const type = primaryType(p.tags);
+  if (type) sub.append(el('span', { className: 'chip', textContent: type }));
+  sub.append(`${p.lat.toFixed(6)}, ${p.lon.toFixed(6)}`);
+
+  const actions = $('d-actions'); actions.replaceChildren(
+    link(`https://www.openstreetmap.org/directions?to=${p.lat}%2C${p.lon}`, 'Rute (OSM)'),
+    link(`https://www.google.com/maps/search/?api=1&query=${p.lat},${p.lon}`, 'Buka di Google Maps'),
+    link(p.osmUrl, 'Lihat di OSM'),
+  );
+  const copy = el('a', { href: '#', textContent: 'Salin koordinat' });
+  copy.addEventListener('click', async (e) => {
+    e.preventDefault();
+    try { await navigator.clipboard.writeText(`${p.lat}, ${p.lon}`); copy.textContent = 'Tersalin'; } catch { copy.textContent = `${p.lat}, ${p.lon}`; }
+  });
+  actions.append(copy);
+
+  const body = $('d-body'); body.replaceChildren();
+  const groups = groupTags(p.tags);
+  if (!groups.length) body.append(el('p', { className: 'hint', textContent: 'Tempat ini belum punya data tambahan di OSM.' }));
+  for (const g of groups) {
+    const dl = el('dl');
+    for (const row of g.rows) {
+      const dd = el('dd');
+      const vals = row.values || [row.value];
+      for (const v of vals) dd.append(el('div', null, valueNode(row, v)));
+      const dt = el('dt', { textContent: row.label || row.key });
+      if (row.label && row.label !== row.key) dt.append(el('span', { className: 'raw', textContent: row.key }));
+      dl.append(el('div', { className: 'd-row' }, dt, dd));
+    }
+    body.append(el('section', { className: 'd-group' }, el('h3', { textContent: g.title }), dl));
+  }
+
+  // info objek OSM
+  const m = p.meta || {};
+  const info = [['Objek', `${p.osmType} ${p.osmId}`], ['Versi', m.version], ['Terakhir diubah', m.timestamp && fmtDate(m.timestamp)],
+    ['Pengubah', m.user], ['Changeset', m.changeset]].filter(([, v]) => v != null && v !== '');
+  const idl = el('dl');
+  for (const [k, v] of info) idl.append(el('div', { className: 'd-row' }, el('dt', { textContent: k }), el('dd', { textContent: String(v) })));
+  body.append(el('section', { className: 'd-group' }, el('h3', { textContent: 'Info OSM' }), idl));
+
+  // semua tag mentah
+  const keys = Object.keys(p.tags || {}).sort();
+  $('d-count').textContent = keys.length;
+  const table = $('d-table'); table.replaceChildren();
+  for (const k of keys) table.append(el('tr', null, el('td', { textContent: k }), el('td', { textContent: p.tags[k] })));
+
+  els.resultsHead.hidden = true;
+  els.results.hidden = true;
+  detailEl.hidden = false;
+  detailEl.scrollIntoView({ block: 'nearest' });
+}
+
+function closeDetail() {
+  openPlaceId = null;
+  detailEl.hidden = true;
+  els.results.hidden = false;
+  els.resultsHead.hidden = places.length === 0;
+}
+$('back').addEventListener('click', closeDetail);
 
 // ---- ekspor ----
 function download(name, text, type) {
