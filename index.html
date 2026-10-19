@@ -18,7 +18,16 @@
       <button type="submit">Pergi</button>
     </form>
 
-    <label for="category">Kategori</label>
+    <label>1. Gambar area pencarian</label>
+    <div id="tools">
+      <button type="button" class="secondary" data-tool="polygon">Polygon</button>
+      <button type="button" class="secondary" data-tool="freehand">Coret bebas</button>
+      <button type="button" class="secondary" data-tool="rectangle">Kotak</button>
+      <button type="button" class="secondary" data-tool="circle">Lingkaran</button>
+    </div>
+    <p id="tool-hint" class="hint">Pilih salah satu bentuk, lalu gambar langsung di peta.</p>
+
+    <label for="category">2. Kategori</label>
     <select id="category"></select>
 
     <div id="custom-tag" hidden>
@@ -26,7 +35,7 @@
       <input id="custom-value" placeholder="value (mis. cafe)">
     </div>
 
-    <button id="search" disabled>Cari tempat</button>
+    <button id="search" disabled>3. Cari tempat</button>
     <button id="clear" class="secondary" disabled>Hapus area</button>
 
     <div id="status" role="status"></div>

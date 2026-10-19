@@ -24,18 +24,106 @@ L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
 const drawn = new L.FeatureGroup().addTo(map);
 const markers = L.layerGroup().addTo(map);
 
+// Toolbar bawaan hanya dipakai untuk edit; menggambar lewat tombol di panel.
 map.addControl(new L.Control.Draw({
   position: 'topleft',
   edit: { featureGroup: drawn, remove: false },
-  draw: { polygon: { allowIntersection: false, showArea: false }, rectangle: true, circle: true, polyline: false, marker: false, circlemarker: false },
+  draw: false,
 }));
 
-map.on(L.Draw.Event.CREATED, (e) => {
+const SHAPE = { color: '#2563eb', weight: 3 };
+const TOOLS = {
+  polygon: { hint: 'Klik peta untuk menaruh titik sudut. Klik titik pertama untuk menutup area.', make: () => new L.Draw.Polygon(map, { allowIntersection: false, showArea: false, shapeOptions: SHAPE }) },
+  rectangle: { hint: 'Tekan dan tarik di peta untuk membuat kotak.', make: () => new L.Draw.Rectangle(map, { shapeOptions: SHAPE }) },
+  circle: { hint: 'Tekan di pusat lalu tarik untuk menentukan radius.', make: () => new L.Draw.Circle(map, { shapeOptions: SHAPE }) },
+  freehand: { hint: 'Tekan dan geser di peta untuk mencoret batas area. Lepas untuk menutupnya.' },
+};
+const DEFAULT_HINT = 'Pilih salah satu bentuk, lalu gambar langsung di peta.';
+
+let activeTool = null;
+let activeHandler = null;
+const fh = { drawing: false, pts: [], line: null };
+const mapEl = map.getContainer();
+
+function setTool(name) {
+  activeTool = name;
+  for (const b of document.querySelectorAll('#tools button')) b.setAttribute('aria-pressed', String(b.dataset.tool === name));
+  $('tool-hint').textContent = name ? TOOLS[name].hint : DEFAULT_HINT;
+  mapEl.classList.toggle('freehand', name === 'freehand');
+}
+
+function stopTool() {
+  if (activeHandler) { activeHandler.disable(); activeHandler = null; }
+  if (fh.line) { map.removeLayer(fh.line); fh.line = null; }
+  fh.drawing = false;
+  map.dragging.enable();
+  setTool(null);
+}
+
+function startTool(name) {
+  stopTool();
+  setTool(name);
+  if (name === 'freehand') { map.dragging.disable(); return; }
+  activeHandler = TOOLS[name].make();
+  activeHandler.enable();
+}
+
+for (const b of document.querySelectorAll('#tools button')) {
+  b.addEventListener('click', () => (activeTool === b.dataset.tool ? stopTool() : startTool(b.dataset.tool)));
+}
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') stopTool(); });
+
+function setArea(layer) {
   drawn.clearLayers(); // satu area aktif
-  drawn.addLayer(e.layer);
+  drawn.addLayer(layer);
   syncButtons();
-});
+}
+
+map.on(L.Draw.Event.CREATED, (e) => { setArea(e.layer); stopTool(); });
+map.on(L.Draw.Event.DRAWSTOP, () => { if (activeTool !== 'freehand') { activeHandler = null; setTool(null); } });
 map.on(L.Draw.Event.EDITED, syncButtons);
+
+// ---- coret bebas ----
+const FH_MIN_PX = 6;   // jarak minimum antar titik
+const FH_MAX_PTS = 250; // batasi titik supaya query Overpass tetap ringan
+
+function thin(latlngs) {
+  const out = [];
+  let last = null;
+  for (const ll of latlngs) {
+    const p = map.latLngToContainerPoint(ll);
+    if (!last || last.distanceTo(p) >= FH_MIN_PX) { out.push(ll); last = p; }
+  }
+  if (out.length > FH_MAX_PTS) {
+    const step = Math.ceil(out.length / FH_MAX_PTS);
+    return out.filter((_, i) => i % step === 0);
+  }
+  return out;
+}
+
+mapEl.addEventListener('pointerdown', (e) => {
+  if (activeTool !== 'freehand' || e.button > 0 || e.target.closest('.leaflet-control')) return;
+  fh.drawing = true;
+  fh.pts = [map.mouseEventToLatLng(e)];
+  fh.line = L.polyline(fh.pts, SHAPE).addTo(map);
+  mapEl.setPointerCapture(e.pointerId);
+  e.preventDefault();
+});
+mapEl.addEventListener('pointermove', (e) => {
+  if (!fh.drawing) return;
+  fh.pts.push(map.mouseEventToLatLng(e));
+  fh.line.setLatLngs(fh.pts);
+});
+function finishFreehand() {
+  if (!fh.drawing) return;
+  const pts = thin(fh.pts);
+  stopTool();
+  if (pts.length < 3) { setStatus('Coretan terlalu pendek. Coba gambar area yang lebih besar.', true); return; }
+  setStatus('');
+  setArea(L.polygon(pts, SHAPE));
+}
+mapEl.addEventListener('pointerup', finishFreehand);
+mapEl.addEventListener('pointercancel', finishFreehand);
 
 // ---- UI ----
 for (const c of CATEGORIES) els.category.add(new Option(c.label, `${c.key}=${c.value}`));
@@ -54,6 +142,7 @@ function setStatus(msg, isError) {
 }
 
 els.clear.addEventListener('click', () => {
+  stopTool();
   drawn.clearLayers();
   markers.clearLayers();
   els.results.replaceChildren();

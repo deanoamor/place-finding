@@ -1,4 +1,10 @@
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
+
+#tools { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+#tools button[aria-pressed="true"] { background: #2563eb; color: #fff; border-color: #2563eb; }
+#tool-hint { margin: 6px 0 0; font-size: 13px; }
+.leaflet-container.freehand { cursor: crosshair; touch-action: none; }
 html, body { height: 100%; margin: 0; font: 14px/1.4 system-ui, sans-serif; color: #1f2937; }
 body { display: flex; }
 
